@@ -204,6 +204,34 @@ http://YOUR_PUBLIC_IP:3000
 
 ---
 
+---
+
+## 📸 Screenshots
+
+### ☁️ EC2 Instance Running on AWS
+
+![EC2 Instance](assets/screenshots/01-ec2-instance.png)
+
+### 🌐 Jenkins Dashboard
+
+![Jenkins Dashboard](assets/screenshots/02-jenkins-dashboard.png)
+
+### ✅ Jenkins Build — All Stages Passed
+
+![Build Success](assets/screenshots/03-jenkins-build-success.png)
+
+### ❌ Built-In Node Offline Error
+
+![Node Offline](assets/screenshots/04-node-offline-error.png)
+
+### 🌍 React App Live on Port 3000
+
+![React App Live](assets/screenshots/05-react-app-live.png)
+
+---
+
+---
+
 ## 🛠️ Troubleshooting
 
 ### ❌ Built-In Node Shows "Offline" — Disk Space Below Threshold
