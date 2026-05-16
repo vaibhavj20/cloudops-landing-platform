@@ -1,70 +1,203 @@
-# Getting Started with Create React App
+# 🚀 Production-Ready React CI/CD Pipeline via Jenkins & Docker on AWS
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+An automated, cloud-native CI/CD pipeline built on AWS EC2 using Amazon Linux 2023. This setup automates the process of pulling a modern React application from GitHub, building a lightweight Docker container image, and serving it dynamically on port `3000`.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## 🧱 System Architecture
 
-### `npm start`
+```text
+GitHub (Code Push) ──> Jenkins (EC2 Server) ──> Docker Build ──> Live React Container (:3000)
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+---
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## ☁️ Step 1 — Launch AWS EC2 Instance
 
-### `npm test`
+- **AMI:** Amazon Linux 2023
+- **Instance Type:** t3.micro (or t2.micro)
+- **Storage:** 20 GB Root Volume (gp3)
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+**Security Group Inbound Rules:**
 
-### `npm run build`
+| Port | Protocol | Source           | Purpose                |
+| ---- | -------- | ---------------- | ---------------------- |
+| 22   | TCP      | My IP / Anywhere | SSH Remote Access      |
+| 8080 | TCP      | Anywhere         | Jenkins Dashboard      |
+| 3000 | TCP      | Anywhere         | React Live Application |
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+---
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## ⚙️ Step 2 — Server Configuration & Prerequisites
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Connect to your instance via SSH:
 
-### `npm run eject`
+```bash
+ssh -i your-key.pem ec2-user@YOUR_PUBLIC_IP
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### 1. Update OS Package Manager
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```bash
+sudo dnf update -y
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### 2. Install Git & Java 21 (AWS Corretto)
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```bash
+sudo dnf install git java-21-amazon-corretto -y
+```
 
-## Learn More
+### 3. Install & Configure Docker Daemon
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```bash
+sudo dnf install docker -y
+sudo systemctl start docker
+sudo systemctl enable docker
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+# Enable ec2-user to run Docker commands without sudo
+sudo usermod -aG docker ec2-user
+newgrp docker
+```
 
-### Code Splitting
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## 🚀 Step 3 — Install & Configure Jenkins
 
-### Analyzing the Bundle Size
+### 1. Add Jenkins Repository and Keys
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+```bash
+sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
+sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+```
 
-### Making a Progressive Web App
+### 2. Install and Start Jenkins Engine
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+```bash
+sudo dnf install jenkins -y
+sudo systemctl enable jenkins
+sudo systemctl start jenkins
+```
 
-### Advanced Configuration
+### 3. 🛑 CRITICAL: Grant Jenkins Permissions to Run Docker
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+For Jenkins to successfully run Docker builds during pipelines, the `jenkins` system user must belong to the `docker` group:
 
-### Deployment
+```bash
+sudo usermod -aG docker jenkins
+sudo systemctl restart jenkins
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+---
 
-### `npm run build` fails to minify
+## 🌐 Step 4 — Initialize Jenkins UI
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Open your browser and navigate to:
+
+```
+http://YOUR_PUBLIC_IP:8080
+```
+
+Fetch the administrator unlock password from the server terminal:
+
+```bash
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+```
+
+Paste the key, select **Install Suggested Plugins**, and set up your admin user profile.
+
+Go to **Manage Jenkins → Plugins → Available Plugins**, look up and install the following:
+
+- **Docker Pipeline**
+- **Pipeline: Stage View**
+
+---
+
+## 📦 Step 5 — Project Codebase Files
+
+Ensure the following configuration files are situated directly within the **root directory** of your project repository:
+
+### `Dockerfile`
+
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+### `.dockerignore`
+
+```
+node_modules
+build
+.git
+```
+
+### `Jenkinsfile`
+
+```groovy
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME = "cloudops-landing-page"
+        CONTAINER_NAME = "cloudops-frontend-container"
+    }
+
+    stages {
+        // Jenkins automatically checks out your main branch into the workspace here
+
+        stage('Build Image') {
+            steps {
+                sh "docker build -t ${APP_NAME} ."
+            }
+        }
+
+        stage('Stop Old Container') {
+            steps {
+                sh "docker stop ${CONTAINER_NAME} || true"
+                sh "docker rm ${CONTAINER_NAME} || true"
+            }
+        }
+
+        stage('Run Container') {
+            steps {
+                sh """
+                docker run -d \
+                --name ${CONTAINER_NAME} \
+                -p 3000:3000 \
+                ${APP_NAME}
+                """
+            }
+        }
+    }
+}
+```
+
+---
+
+## ⚙️ Step 6 — Orchestrate the Jenkins Job
+
+1. On the Jenkins dashboard, click **New Item**.
+2. Enter `cloudops-ci-cd-pipeline`, choose **Pipeline**, and hit **OK**.
+3. Scroll down to the **Pipeline** section and configure:
+   - **Definition:** Pipeline script from SCM
+   - **SCM:** Git
+   - **Repository URL:** `https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git`
+   - **Branch Specifier:** `*/main`
+   - **Script Path:** `Jenkinsfile`
+4. Click **Save**, then trigger the deployment by hitting **Build Now**.
+
+---
+
+## 🌍 Verification
+
+Once all execution stages show green bars in the Jenkins Stage View UI, access the running frontend app at:
+
+```
+http://YOUR_PUBLIC_IP:3000
+```
