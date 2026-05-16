@@ -201,3 +201,92 @@ Once all execution stages show green bars in the Jenkins Stage View UI, access t
 ```
 http://YOUR_PUBLIC_IP:3000
 ```
+
+---
+
+## 🛠️ Troubleshooting
+
+### ❌ Built-In Node Shows "Offline" — Disk Space Below Threshold
+
+**Symptom:** Jenkins dashboard shows `Built-In Node → (offline)` and builds refuse to run.
+
+**Root Cause:** Jenkins continuously monitors disk space on `/tmp`. When free space drops below the default threshold of **1 GB**, Jenkins automatically marks the executor as offline to prevent failed builds.
+
+**Error you will see in Jenkins:**
+
+```
+Disk space is below threshold of 1.00 GiB.
+Only 973.48 MiB left on /tmp
+```
+
+---
+
+#### ✅ Fix — Increase /tmp RAM Disk Size
+
+**Step 1 — Check current disk usage:**
+
+```bash
+df -h
+```
+
+**Step 2 — Temporarily increase `/tmp` to 2GB:**
+
+```bash
+sudo mount -o remount,size=2G /tmp
+```
+
+**Step 3 — Verify the change applied:**
+
+```bash
+df -h
+```
+
+**Step 4 — Make it permanent (survives reboots):**
+
+```bash
+sudo nano /etc/fstab
+```
+
+Find the `/tmp` line and update it to:
+
+```
+tmpfs /tmp tmpfs defaults,noatime,size=2G 0 0
+```
+
+Save and exit: `Ctrl+X` → `Y` → `Enter`
+
+**Step 5 — Remount with new settings:**
+
+```bash
+sudo mount -o remount /tmp
+```
+
+**Step 6 — Restart Jenkins:**
+
+```bash
+sudo systemctl restart jenkins
+```
+
+**Step 7 — Refresh the Jenkins UI.** The Built-In Node should come back online automatically.
+
+> 💡 If it's still offline after restarting, go to:
+> **Manage Jenkins → Nodes → Built-In Node → Click "Mark this node online"**
+
+---
+
+#### 🧹 Optional — Free Up Disk Space
+
+Run these commands to reclaim space safely without resizing `/tmp`:
+
+```bash
+# Clean DNF package cache
+sudo dnf clean all
+
+# Remove old system logs (older than 3 days)
+sudo journalctl --vacuum-time=3d
+
+# Remove unused Docker images, containers, and networks
+docker system prune -af
+```
+
+> ⚠️ Only run `docker system prune -af` if you don't need any cached Docker images — it removes everything unused.
